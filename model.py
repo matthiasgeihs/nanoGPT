@@ -106,19 +106,23 @@ class CausalSelfAttention(nn.Module):
         # 20, 2023) not allow this and it seems like training results are
         # actually slighlty better when keeping the original scaling factor.
         attn_mask = self.attn_mask[:, :T, :T] # (nh, T, T)
+        is_causal = False
         if self.flash:            
             # efficient attention using Flash Attention CUDA kernels
             #
-            # The function `scaled_dot_product_attention` is currently only
-            # optimized for the case where is_caual = True and attn_mask = None.
-            # Hence we ensure this here if we don't use the ALiBi mask. See
+            # The function `scaled_dot_product_attention` is currently optimized
+            # for the case is_causal = True and attn_mask = None. Hence we set
+            # this here if we don't need the custom ALiBi mask. See
             # https://github.com/pytorch/pytorch/issues/96099 for more details.
-            if self.config.pos_encoding == 'alibi':
-                causal = False
-            else:
-                causal =  True
+            if self.config.pos_encoding != 'alibi':
+                is_causal =  True
                 attn_mask = None
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=causal)
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.dropout if self.training else 0,
+                is_causal=is_causal,
+            )
         else:
             # manual implementation of attention
             att = q @ k.transpose(-2, -1) # (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
