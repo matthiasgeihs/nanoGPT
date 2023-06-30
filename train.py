@@ -38,6 +38,7 @@ log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
+keep_checkpoints = False # if True, do not overwrite checkpoints
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
@@ -270,6 +271,7 @@ while True:
                 "val/loss": losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_per_iter * iter_num,
             })
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
@@ -283,7 +285,8 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                fn = f'ckpt{iter_num if keep_checkpoints else ""}.pt'
+                torch.save(checkpoint, os.path.join(out_dir, fn))
     if iter_num == 0 and eval_only:
         break
 
