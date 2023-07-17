@@ -38,6 +38,7 @@ log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
+store_init_weights = False # if True, store initial weights as a checkpoint
 keep_checkpoints = False # if True, do not overwrite checkpoints
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
@@ -273,9 +274,9 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_per_iter * iter_num,
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+        if losses['val'] < best_val_loss or always_save_checkpoint or store_init_weights:
             best_val_loss = losses['val']
-            if iter_num > 0:
+            if iter_num > 0 or store_init_weights:
                 checkpoint = {
                     'model': raw_model.state_dict(),
                     'optimizer': optimizer.state_dict(),
@@ -285,8 +286,19 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                fn = f'ckpt{iter_num if keep_checkpoints else ""}.pt'
-                torch.save(checkpoint, os.path.join(out_dir, fn))
+                base_fn = os.path.join(out_dir, 'ckpt.pt')
+                iter_fn = os.path.join(out_dir, f'ckpt{iter_num}.pt')
+                if iter_num == 0 and store_init_weights:
+                    torch.save(checkpoint, iter_fn)
+                elif keep_checkpoints:
+                    torch.save(checkpoint, iter_fn)
+                    # symlink from checkpoint to base filename
+                    if os.path.islink(base_fn):
+                        os.remove(base_fn)
+                    os.symlink(iter_fn, base_fn)
+                else:
+                    torch.save(checkpoint, base_fn)
+                    
     if iter_num == 0 and eval_only:
         break
 
